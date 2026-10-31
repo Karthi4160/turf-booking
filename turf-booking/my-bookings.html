@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>My Bookings</title><link rel="stylesheet" href="style.css"></head>
+<body>
+    <nav><h1>⚽ TurfBook</h1><div><a href="index.html">Home</a></div></nav>
+    <div class="container">
+        <h2>My Bookings</h2>
+        <div style="display: flex; gap: 1rem; margin: 1rem 0 2rem;">
+            <input type="tel" id="searchPhone" placeholder="Enter your 10-digit phone" style="max-width: 300px; margin-bottom: 0;">
+            <button onclick="search()" class="btn">Search</button>
+        </div>
+        <div id="results"></div>
+    </div>
+
+    <!-- Reschedule Modal -->
+    <div id="rescheduleModal" class="modal">
+        <div class="modal-content">
+            <h3>Reschedule Booking</h3>
+            <input type="hidden" id="resId">
+            <input type="hidden" id="resTurf">
+            <label>New Date:</label>
+            <input type="date" id="resDate">
+            <label>New Slot:</label>
+            <select id="resSlot">
+                <option>09:00-10:00</option><option>10:00-11:00</option>
+                <option>11:00-12:00</option><option>14:00-15:00</option>
+                <option>15:00-16:00</option><option>16:00-17:00</option>
+                <option>18:00-19:00</option><option>19:00-20:00</option>
+            </select>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <button onclick="submitReschedule()" class="btn" style="flex: 1;">Confirm</button>
+                <button onclick="document.getElementById('rescheduleModal').style.display='none'" class="btn" style="flex: 1; background: #ccc; color: #333;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function search() {
+            const phone = document.getElementById('searchPhone').value;
+            if (!/^\d{10}$/.test(phone)) return alert("Enter a valid 10-digit phone number.");
+            const res = await fetch(`api/my_bookings.php?phone=${phone}`);
+            const data = await res.json();
+            
+            if (data.length === 0) return document.getElementById('results').innerText = "No bookings found.";
+            
+            let walletMsg = data[0].wallet_balance > 0 ? `<p style="color: var(--primary); font-weight: bold; margin-bottom: 1rem;">💰 Wallet Balance: ₹${data[0].wallet_balance}</p>` : '';
+
+            document.getElementById('results').innerHTML = walletMsg + data.map(b => `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; ${b.status==='cancelled'?'opacity: 0.6;':''}">
+                    <div>
+                        <h4>${b.turf_name} (${b.sport.toUpperCase()})</h4>
+                        <p>${b.booking_date} | ${b.slot_time} | ₹${b.total_amount}</p>
+                        <span style="font-weight: bold; color: ${b.status==='confirmed'?'var(--primary)':'var(--danger)'}">${b.status.toUpperCase()}</span>
+                    </div>
+                    ${b.status==='confirmed' ? `
+                    <div>
+                        <button onclick="cancelBooking(${b.id})" style="color: var(--danger); border: none; background: none; cursor: pointer; font-weight: bold; margin-bottom: 0.5rem; display: block;">Cancel</button>
+                        <button onclick="openReschedule(${b.id}, ${b.turf_id})" style="color: #3b82f6; border: none; background: none; cursor: pointer; font-weight: bold;">Reschedule</button>
+                    </div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function cancelBooking(id) {
+            if (!confirm("Cancel this booking?")) return;
+            const fd = new FormData(); fd.append('id', id);
+            await fetch('api/cancel_booking.php', { method: 'POST', body: fd });
+            search();
+        }
+
+        function openReschedule(id, turfId) {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('resId').value = id;
+            document.getElementById('resTurf').value = turfId;
+            document.getElementById('resDate').min = today;
+            document.getElementById('resDate').value = today;
+            document.getElementById('rescheduleModal').style.display = 'flex';
+        }
+
+        async function submitReschedule() {
+            const id = document.getElementById('resId').value;
+            const turf = document.getElementById('resTurf').value;
+            const date = document.getElementById('resDate').value;
+            const slot = document.getElementById('resSlot').value;
+
+            if (!date || date < new Date().toISOString().split('T')[0]) return alert("Choose a valid future date.");
+
+            const fd = new FormData(); 
+            fd.append('id', id); fd.append('turf_id', turf); fd.append('date', date); fd.append('slot', slot);
+            
+            const res = await fetch('api/reschedule_booking.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            
+            alert(data.message);
+            if (data.status === 'success') {
+                document.getElementById('rescheduleModal').style.display = 'none';
+                search();
+            }
+        }
+    </script>
+</body>
+</html>

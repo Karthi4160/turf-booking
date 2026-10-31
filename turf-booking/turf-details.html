@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Book Turf</title><link rel="stylesheet" href="style.css"></head>
+<body>
+    <nav><h1>⚽ TurfBook</h1><div><a href="turfs.html">Back</a></div></nav>
+    <div class="container" style="max-width: 700px;">
+        <div class="card">
+            <h2 id="title">Loading...</h2>
+            <div class="grid-2">
+                <div>
+                    <label>Date:</label>
+                    <input type="date" id="date" required>
+                </div>
+                <div>
+                    <label>Sport:</label>
+                    <select id="sport" onchange="calcPrice()">
+                        <option value="football"></option>
+                        <option value="cricket"></option>
+                    </select>
+                </div>
+            </div>
+            <label>Select Slot:</label>
+            <div id="slots" class="grid-4"></div>
+
+            <form id="bookForm" style="margin-top: 1.5rem; border-top: 1px solid #eee; padding-top: 1.5rem;">
+                <input type="text" id="name" placeholder="Full Name" required>
+                <input type="email" id="email" placeholder="Email Address" required>
+                <input type="tel" id="phone" placeholder="10-digit Phone" required>
+                
+                <div style="background: #f9fafb; padding: 1rem; margin-bottom: 1rem; border-radius: 4px; display: flex; justify-content: space-between; font-weight: bold;">
+                    <span>Total:</span>
+                    <span id="total" style="color: var(--primary);">₹0</span>
+                </div>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Peak hours (6 PM+) and weekends add ₹200/hr. Earn 5% cashback.</p>
+                <button type="submit" class="btn" style="width: 100%;">Confirm & Pay</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const turfId = params.get('id');
+        const priceFootball = parseInt(params.get('pf')) || 1200;
+        const priceCricket = parseInt(params.get('pc')) || 900;
+        document.getElementById('title').innerText = params.get('name') || 'Turf';
+        const sportSel = document.getElementById('sport');
+        sportSel.options[0].text = `Football (₹${priceFootball}/hr)`;
+        sportSel.options[1].text = `Cricket (₹${priceCricket}/hr)`;
+
+        const slots = ["09:00-10:00","10:00-11:00","11:00-12:00","14:00-15:00","15:00-16:00","16:00-17:00","18:00-19:00","19:00-20:00"];
+        let selectedSlot = null, finalAmount = 0;
+
+        // Past Date Validation
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').value = today;
+        document.getElementById('date').min = today;
+
+        async function loadSlots() {
+            const date = document.getElementById('date').value;
+            const box = document.getElementById('slots');
+            box.innerHTML = "Loading...";
+            selectedSlot = null; finalAmount = 0; document.getElementById('total').innerText = "₹0";
+
+            const res = await fetch(`api/get_slots.php?date=${date}&turf_id=${turfId}`);
+            const data = await res.json();
+            
+            box.innerHTML = "";
+            slots.forEach(s => {
+                const div = document.createElement('div');
+                div.innerText = s;
+                div.className = "slot";
+                if (data.booked.includes(s)) {
+                    div.classList.add('booked');
+                } else {
+                    div.onclick = () => {
+                        document.querySelectorAll('.slot').forEach(el => el.classList.remove('active'));
+                        div.classList.add('active');
+                        selectedSlot = s;
+                        calcPrice();
+                    };
+                }
+                box.appendChild(div);
+            });
+        }
+
+        function calcPrice() {
+            const sport = sportSel.value;
+            let rate = sport === 'football' ? priceFootball : priceCricket;
+            if (!selectedSlot) return;
+            // Uniqueness: Peak Hour Pricing (6PM+)
+            const startHour = parseInt(selectedSlot.split(':')[0]);
+            if (startHour >= 18) rate += 200;
+            // Weekend pricing
+            const day = new Date(document.getElementById('date').value).getDay();
+            if (day === 0 || day === 6) rate += 200;
+            finalAmount = rate;
+            document.getElementById('total').innerText = `₹${finalAmount}`;
+        }
+
+        document.getElementById('date').onchange = loadSlots;
+
+        document.getElementById('bookForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const date = document.getElementById('date').value;
+
+            // Client-side validation
+            if (!/^\d{10}$/.test(phone)) return alert("Phone must be exactly 10 digits.");
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert("Invalid Email Format.");
+            if (date < today) return alert("Past dates are not allowed.");
+            if (!selectedSlot) return alert("Please select a slot.");
+
+            // Mock OTP API
+            await fetch('api/mock_otp.php');
+            const otp = prompt("OTP sent to your phone. Enter 1234:");
+            if (otp !== "1234") return alert("OTP Failed");
+
+            const btn = e.target.querySelector('button');
+            btn.innerText = "Processing Payment..."; btn.disabled = true;
+
+            // Mock Payment API
+            const payRes = await fetch('api/mock_payment.php', { method: 'POST', body: JSON.stringify({amount: finalAmount}) });
+            const payData = await payRes.json();
+
+            if (payData.status === 'success') {
+                const payload = {
+                    name: document.getElementById('name').value, email: email, phone: phone,
+                    date: date, slot: selectedSlot, sport: sportSel.value,
+                    turf_id: turfId, amount: finalAmount, txn: payData.txn_id
+                };
+                const res = await fetch('api/book_turf.php', { method: 'POST', body: JSON.stringify(payload) });
+                const result = await res.json();
+                alert(result.message);
+                if (result.status === 'success') window.location.href = "my-bookings.html";
+            } else {
+                alert(payData.message || "Payment failed");
+            }
+            btn.innerText = "Confirm & Pay"; btn.disabled = false;
+        };
+        loadSlots();
+    </script>
+</body>
+</html>

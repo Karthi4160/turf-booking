@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Available Turfs</title><link rel="stylesheet" href="style.css"></head>
+<body>
+    <nav>
+        <h1>⚽ TurfBook</h1>
+        <div><a href="index.html">Home</a><a href="turfs.html">Turfs</a><a href="my-bookings.html">My Bookings</a></div>
+    </nav>
+    <div class="container">
+        <h2>Available Turfs</h2>
+        <div id="turfsList" class="grid-2" style="margin-top: 1.5rem;">Loading...</div>
+    </div>
+    <script>
+        fetch('api/get_turfs.php').then(r => r.json()).then(data => {
+            document.getElementById('turfsList').innerHTML = data.map(t => `
+                <div class="card">
+                    <h3>${t.name}</h3>
+                    <p style="color: #666;">${t.location}</p>
+                    <p style="margin: 1rem 0; font-weight: bold; color: var(--primary);">Football: ₹${t.price_football}/hr | Cricket: ₹${t.price_cricket}/hr</p>
+                    <a href="turf-details.html?id=${t.id}&name=${encodeURIComponent(t.name)}&pf=${t.price_football}&pc=${t.price_cricket}" class="btn" style="width: 100%; text-align: center;">Book Now</a>
+                </div>`).join('');
+        }).catch(() => {
+            document.getElementById('turfsList').innerText = "Could not load turfs. Is Apache/MySQL running?";
+        });
+    </script>
+</body>
+</html>
